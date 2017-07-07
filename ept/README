@@ -1,0 +1,8 @@
+popsummary takes the results from an ICMP scan and gnmap files as arguments 
+and prints out javascript to populate open ports.  It tries to guess what to 
+put in the "comments" field.  It also takes the list of "IPs scanned" and uses 
+that list to add any missing IPs in the ICMP section.
+
+I use xclip to copy it to the clipboard like so:
+    xclip -i < <(popsummary.py "ICMP Echo Request.spl" *.gnmap)
+and then paste it into the console tab of developer tools in Chrom(ium).
