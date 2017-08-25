@@ -63,14 +63,14 @@ class CSO(object):
             self.driver.execute_script('arguments[0].setAttribute("value", arguments[1])', element, value)
     def clickOn(self, s):
         self.driver.find_element_by_css_selector(s).click()
-    def addFileToRepo(self, filename):
+    def addFileToRepo(self, filename, title_fmt="{title}"):
         self.driver.find_element_by_xpath('//a[contains(., "Upload File")]').click()
         #XXX Change this to use repeatOnError
         #XXX While you're at it, maybe make roe easier to use and put in a maximum number
         #of attempts option
         title = os.path.basename(filename)
         title = os.path.splitext(title)[0]
-        title = '2017 ITA - ' + title
+        title = title_fmt.format(title = title)
         repeatOnError(
                 lambda: self.setValue(self.driver.find_element_by_id('name'), title),
                 lambda x: True)
@@ -112,6 +112,44 @@ class CSO(object):
                          + '[label[contains(., "' + labelname + '")]]/following-sibling::td').text
             except:
                 raise Exception("Error getting label '{}'".format(labelname))
+
+    def waitFor(self, css="body", xpath=None, timeout=10):
+        time = 0
+        while time < timeout:
+            try:
+                if xpath is not None:
+                    self.driver.find_element_by_xpath(xpath)
+                else:
+                    self.driver.find_element_by_css_selector(css)
+            except NoSuchElement:
+                sleep(1)
+                time += 1
+            else:
+                break
+
+    def addAuditResources(self, search_strings):
+        for search_str in search_strings:
+            if search_str == "":
+                next
+            self.driver.execute_script('document.querySelector("#addResource").click()')
+            opts = self.driver.find_elements_by_xpath('//select[@id="selectedResourceID"]/option[contains(., "%s")]' % search_str)
+            if len(opts) > 5:
+                next
+            optvalues = [opt.get_attribute('value') for opt in opts]
+            while True:
+                self.setValue(self.driver.find_element_by_id('selectedResourceID'), optvalues.pop())
+                c.driver.execute_script(""" document.querySelector(
+                    "#SaveAndCloseButtontsactionbeansmyassignmentsVerifyAuditControlResourcePropertiesActionBean").click()')
+                    """)
+                if(len(optvalues) == 0):
+                    break
+                else:
+                    self.driver.execute_script('document.querySelector("#addResource").click()')
+            try:
+                self.clickOn('#SaveAndNextButtonQuestion')
+            except:
+                break
+            sleep(2)
 
     def getRiskControls(self):
         while True:

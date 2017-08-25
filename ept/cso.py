@@ -48,7 +48,7 @@ class CSO(object):
             self.driver.find_element_by_id('password').send_keys(self.creds['password'])
             self.driver.find_element_by_id('LoginButton').click()
         else:
-            prompt('Enter credentials and hit enter when done')
+            prompt('Login and hit enter when done')
 
     def setValue(self, element, value):
         if element.tag_name == 'textarea':
@@ -64,7 +64,8 @@ class CSO(object):
         sleep(2)
         self.clickOn('#ui-accordion-accordion-panel-1 > div:nth-child(6) > a')
     def moveToTop(self, company):
-        self.driver.find_element_by_xpath('//a[@href="/secure/BackendAdmin/ViewClustScanners.html"]').click()
+        #self.driver.find_element_by_xpath('//a[@href="/secure/BackendAdmin/ViewClustScanners.html"]').click()
+        self.driver.get('https://cso.tracesecurity.com/secure/BackendAdmin/ViewClustScanners.html')
         self.driver.find_element_by_xpath('//a[contains(., "5.0 Scanners")]').click()
         while True:
             try:
@@ -95,9 +96,9 @@ class CSO(object):
             p.find_element_by_css_selector('button[title="close"]').click()
         return vulns
     #Timeout can be -1 for infinite
-    def css(selector, timeout=5, msg=None):
-        while timeout !== 0:
-            timeout--
+    def css(self, selector, timeout=5, msg=None):
+        while timeout != 0:
+            timeout -= 1
             try:
                 return self.driver.find_element_by_css_selector(selector)
             except NoSuchElementException:
@@ -106,7 +107,6 @@ class CSO(object):
         return None
 
     def addFigure(self, filename):
-        repeatOnError(
         iframe = self.css('iframe')
         self.driver.switch_to.frame(iframe)
         try:
