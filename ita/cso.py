@@ -118,36 +118,48 @@ class CSO(object):
         while time < timeout:
             try:
                 if xpath is not None:
-                    self.driver.find_element_by_xpath(xpath)
+                    return self.driver.find_element_by_xpath(xpath)
                 else:
-                    self.driver.find_element_by_css_selector(css)
-            except NoSuchElement:
-                sleep(1)
-                time += 1
+                    return self.driver.find_element_by_css_selector(css)
+            except NoSuchElementException:
+                if time > timeout:
+                    raise
+                else:
+                    sleep(1)
+                    time += 1
             else:
                 break
 
     def addAuditResources(self, search_strings):
         for search_str in search_strings:
-            if search_str == "":
-                next
-            self.driver.execute_script('document.querySelector("#addResource").click()')
-            opts = self.driver.find_elements_by_xpath('//select[@id="selectedResourceID"]/option[contains(., "%s")]' % search_str)
-            if len(opts) > 5:
-                next
-            optvalues = [opt.get_attribute('value') for opt in opts]
-            while True:
-                self.setValue(self.driver.find_element_by_id('selectedResourceID'), optvalues.pop())
-                c.driver.execute_script(""" document.querySelector(
-                    "#SaveAndCloseButtontsactionbeansmyassignmentsVerifyAuditControlResourcePropertiesActionBean").click()')
-                    """)
-                if(len(optvalues) == 0):
-                    break
-                else:
-                    self.driver.execute_script('document.querySelector("#addResource").click()')
+            if search_str != "":
+                addScript = self.waitFor(xpath='//a[@id="addResource"]').get_attribute('onclick')
+                self.driver.execute_script(addScript)
+                close_button =  self.waitFor(xpath='//div[span[contains(., "Create Control Resource")] ]//button')
+                opts = self.driver.find_elements_by_xpath('//select[@id="selectedResourceID"]/option')
+                optdict = {}
+                for opt in opts:
+                    if re.search(search_str, opt.text, re.I) is not None:
+                        optdict[opt.get_attribute('value')] = opt.text
+                optvalues = optdict.keys()
+                #optvalues = [opt.get_attribute('value') for opt in opts if re.search(search_str, opt.text, re.I) is not None]
+                if len(optvalues) == 0:
+                    print "NO MATCH for", search_str
+                    close_button.click()
+                while len(optvalues) > 0:
+                    val = optvalues.pop()
+                    self.setValue(self.waitFor(css='#selectedResourceID'), val)
+                    c.driver.execute_script(""" document.querySelector(
+                        "#SaveAndCloseButtontsactionbeansmyassignmentsVerifyAuditControlResourcePropertiesActionBean").click()
+                        """)
+                    print "Added resource %s" % optdict[val]
+                    sleep(3)
+                    if(len(optvalues) > 0):
+                        self.driver.execute_script(addScript)
             try:
-                self.clickOn('#SaveAndNextButtonQuestion')
-            except:
+                print "Moving to next control"
+                self.driver.execute_script('document.querySelector("#SaveAndNextButtonQuestion").click()')
+            except NoSuchElementException:
                 break
             sleep(2)
 
