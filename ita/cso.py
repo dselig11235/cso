@@ -142,7 +142,6 @@ class CSO(object):
                     if re.search(search_str, opt.text, re.I) is not None:
                         optdict[opt.get_attribute('value')] = opt.text
                 optvalues = optdict.keys()
-                #optvalues = [opt.get_attribute('value') for opt in opts if re.search(search_str, opt.text, re.I) is not None]
                 if len(optvalues) == 0:
                     print "NO MATCH for", search_str
                     close_button.click()
@@ -158,6 +157,7 @@ class CSO(object):
                         self.driver.execute_script(addScript)
             try:
                 print "Moving to next control"
+                self.driver.find_element_by_id('SaveAndNextButtonQuestion')
                 self.driver.execute_script('document.querySelector("#SaveAndNextButtonQuestion").click()')
             except NoSuchElementException:
                 break
