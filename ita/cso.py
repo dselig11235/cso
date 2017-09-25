@@ -4,6 +4,7 @@ from selenium import webdriver
 import os, re
 from ConfigParser import ConfigParser, NoOptionError, NoSectionError
 from interactive import *
+from time import strftime
 
 def getTitleFromFilename(filename):
     title = os.path.basename(filename)
@@ -115,22 +116,166 @@ class CSO(object):
 
     def waitFor(self, css="body", xpath=None, timeout=10):
         time = 0
-        while time < timeout:
+        while True:
             try:
                 if xpath is not None:
                     return self.driver.find_element_by_xpath(xpath)
                 else:
                     return self.driver.find_element_by_css_selector(css)
-            except NoSuchElementException:
+
+            except NoSuchElementException as e:
+                time += 1
                 if time > timeout:
                     raise
                 else:
                     sleep(1)
-                    time += 1
-            else:
-                break
 
-    def addAuditResources(self, search_strings):
+    def getAllControls(self):
+        data = []
+        while True:
+            self.waitFor(css='#SaveAndCloseButtonQuestion')
+            data.append(self.getControlData())
+            try:
+                print "Moving to next control"
+                self.driver.find_element_by_id('SaveAndNextButtonQuestion')
+                self.driver.execute_script('document.querySelector("#SaveAndNextButtonQuestion").click()')
+            except NoSuchElementException:
+                break
+            sleep(2)
+        return data
+
+    def getControlData(self):
+        data = {}
+        data['control'] = self.waitFor('#divChildParentControlEdit').text
+        verify_mapping = {
+                0: 'unverified',
+                1: 'implemented',
+                2: 'not implemented',
+                4: 'in progress'
+            }
+        verification_elem = self.waitFor(xpath = '//input[starts-with(@id, "controlVerification") and @checked="checked"]')
+        verification_value = verification_elem.get_attribute('value')
+        data['verification'] = verify_mapping[int(verification_value)]
+        resource_rows = self.driver.find_elements_by_css_selector('table#resourcesTable tr')[1:]
+        resources = [r.find_elements_by_tag_name('td')[1].text for r in resource_rows ]
+        data['resources'] = '|'.join(resources)
+        data['observation'] = self.waitFor(css='#notes').get_attribute('value')
+        data['recommendation'] = self.waitFor(css='#auditRecommendation').get_attribute('value')
+        data['date'] = self.waitFor(css='#auditDate').get_attribute('value')
+        method_mapping = {
+                0: '',
+                1: 'interview',
+                2: 'observation',
+                5: 'documentation',
+                6: 'testing'
+            }
+        try:
+            method_value = self.waitFor(css='#grcAuditMethodTypeID').get_attribute('value')
+            data['method'] = method_mapping[method_value]
+        except:
+            pass
+        try:
+            data['source'] = self.waitFor(css='#auditInterviewee').get_attribute('value')
+        except:
+            pass
+        return data
+
+    def batchAddAuditData(self, data):
+        for row in data:
+            self.waitFor(css='#SaveAndCloseButtonQuestion')
+            self.driver.execute_script("$('#editControl').show(); $('#noEditControl').hide(); $('#editingControl').val(true);")
+            self.setAll(row)
+            try:
+                print "Moving to next control"
+                self.driver.find_element_by_id('SaveAndNextButtonQuestion')
+                self.driver.execute_script('document.querySelector("#SaveAndNextButtonQuestion").click()')
+            except NoSuchElementException:
+                break
+            sleep(2)
+    def setAll(self, row):
+        virt = {
+                'verification': self.setVerification,
+                'supporting documentation': self.addResources,
+                'resources': self.addResources,
+                'observation': self.setObservation,
+                'recommendation': self.setRecommendation,
+                'method': self.setMethod,
+                'source': self.setSource,
+                'date': self.setDate
+            }
+        for key, value in row.iteritems():
+            if key in virt and value is not None:
+                virt[key](value)
+        if 'date' not in row:
+            self.setDate()
+    def setVerification(self, implemented):
+        mapping = {
+                'unverified': 0,
+                'implemented': 1,
+                'not implemented': 2,
+                'unimplemented': 2,
+                'partial': 4,
+                'partially implemented': 4,
+                'in progress': 4
+            }
+        implemented = implemented.lower()
+        if implemented not in mapping:
+            print "WARNING:", implemented, "is not a valid verification string." 
+        else:
+            selector = "#controlVerificationStatus_%d" % mapping[implemented]
+            self.waitFor(css=selector).click()
+            #self.driver.execute_script('arguments[0].checked=true;', self.waitFor(css=selector))
+    def setObservation(self, text):
+        if text != '':
+            self.setValue(self.waitFor(css='#notes'), text)
+    def setRecommendation(self, text):
+        if text != '':
+            self.setValue(self.waitFor(css='#auditRecommendation'), text)
+    def setDate(self, date=None):
+        if date is None:
+            if len(self.waitFor(css='#auditDate').get_attribute('value')) > 0:
+                return
+            date = strftime("%m/%d/%Y")
+        self.setValue(self.waitFor(css='#auditDate'), date)
+    def setMethod(self, method):
+        mapping = {
+                'interview': 1,
+                'observation': 2,
+                'documentation': 5,
+                'testing': 6
+            }
+        method = method.lower()
+        self.setValue(self.waitFor('#grcAuditMethodTypeID'), mapping[method])
+    def setSource(self, source):
+        if source != '':
+            self.setValue(self.waitFor('#auditInterviewee'), source)
+    def addResources(self, search_string):
+        if search_string != "":
+            addScript = self.waitFor(xpath='//a[@id="addResource"]|//div[@id="resourcesTable_wrapper"]//a').get_attribute('onclick')
+            self.driver.execute_script(addScript)
+            close_button =  self.waitFor(xpath='//div[span[contains(., "Create Control Resource")] ]//button')
+            self.waitFor(xpath='//select[@id="selectedResourceID"]/option')
+            opts = self.driver.find_elements_by_xpath('//select[@id="selectedResourceID"]/option')
+            optdict = {}
+            for opt in opts:
+                if re.search(search_string, opt.text, re.I) is not None:
+                    optdict[opt.get_attribute('value')] = opt.text
+            optvalues = optdict.keys()
+            if len(optvalues) == 0:
+                print "NO MATCH for", search_string
+                close_button.click()
+            while len(optvalues) > 0:
+                val = optvalues.pop()
+                self.setValue(self.waitFor(css='#selectedResourceID'), val)
+                self.driver.execute_script(""" document.querySelector(
+                    "#SaveAndCloseButtontsactionbeansmyassignmentsVerifyAuditControlResourcePropertiesActionBean").click()
+                    """)
+                print "Added resource %s" % optdict[val]
+                sleep(3)
+                if(len(optvalues) > 0):
+                        self.driver.execute_script(addScript)
+
+    def batchAddAuditResources(self, search_strings):
         for search_str in search_strings:
             if search_str != "":
                 addScript = self.waitFor(xpath='//a[@id="addResource"]').get_attribute('onclick')
