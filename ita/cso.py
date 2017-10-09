@@ -65,23 +65,15 @@ class CSO(object):
     def clickOn(self, s):
         self.driver.find_element_by_css_selector(s).click()
     def addFileToRepo(self, filename, title_fmt="{title}"):
-        self.driver.find_element_by_xpath('//a[contains(., "Upload File")]').click()
-        #XXX Change this to use repeatOnError
-        #XXX While you're at it, maybe make roe easier to use and put in a maximum number
-        #of attempts option
+        self.waitFor(xpath='//a[contains(., "Upload File")]').click()
         title = os.path.basename(filename)
         title = os.path.splitext(title)[0]
         title = title_fmt.format(title = title)
-        repeatOnError(
-                lambda: self.setValue(self.driver.find_element_by_id('name'), title),
-                lambda x: True)
-        self.driver.find_element_by_css_selector('input[name="file"]').send_keys(os.path.realpath(filename))
-        self.driver.find_element_by_xpath('//button[span[contains(., "Save and Next")]]').click()
-        repeatOnError(
-                lambda: self.driver.find_elements_by_css_selector(
-                            'tbody[role="alert"] input[type="checkbox"]')[1].click(),
-                lambda x: True)
-        self.driver.find_element_by_xpath('//button[span[contains(., "Save and Close")]]').click()
+        self.setValue(self.waitFor('#name'), title)
+        self.waitFor('input[name="file"]').send_keys(os.path.realpath(filename))
+        self.waitFor(xpath='//button[span[contains(., "Save and Next")]]').click()
+        self.waitFor('tbody[role="alert"] tr:nth-child(2) input[type="checkbox"]').click()
+        self.waitFor(xpath='//button[span[contains(., "Save and Close")]]').click()
 
     def getSiblingOfLabel(self, labelname):
         try:
@@ -146,6 +138,8 @@ class CSO(object):
 
     def getControlData(self):
         data = {}
+        self.editControl()
+        data['asset'] = self.waitFor('#editControl>table>tbody>tr>td:nth-child(2)').text
         data['control'] = self.waitFor('#divChildParentControlEdit').text
         verify_mapping = {
                 0: 'unverified',
@@ -163,11 +157,11 @@ class CSO(object):
         data['recommendation'] = self.waitFor(css='#auditRecommendation').get_attribute('value')
         data['date'] = self.waitFor(css='#auditDate').get_attribute('value')
         method_mapping = {
-                0: '',
-                1: 'interview',
-                2: 'observation',
-                5: 'documentation',
-                6: 'testing'
+                '0': '',
+                '1': 'interview',
+                '2': 'observation',
+                '5': 'documentation',
+                '6': 'testing'
             }
         try:
             method_value = self.waitFor(css='#grcAuditMethodTypeID').get_attribute('value')
@@ -180,10 +174,54 @@ class CSO(object):
             pass
         return data
 
+    def getAllRiskControls(self):
+        data = []
+        while True:
+            self.waitFor(css='#SaveAndCloseButtonQuestion')
+            data.append(self.getRiskControlData())
+            try:
+                print "Moving to next control"
+                self.driver.find_element_by_id('SaveAndNextButtonQuestion')
+                self.driver.execute_script('document.querySelector("#SaveAndNextButtonQuestion").click()')
+            except NoSuchElementException:
+                break
+            sleep(2)
+        return data
+
+    def getRiskControlData(self):
+        data = {}
+        self.editControl()
+        data['asset'] = self.waitFor('#editControl>table>tbody>tr>td:nth-child(2)').text
+        data['control'] = self.waitFor('#divChildParentControlEdit').text
+        verify_mapping = {
+                0: 'unverified',
+                1: 'implemented',
+                2: 'not implemented',
+                3: 'NA',
+                4: 'in progress'
+            }
+        verification_elem = self.waitFor(xpath = '//input[starts-with(@id, "controlImplementation") and @checked="checked"]')
+        verification_value = verification_elem.get_attribute('value')
+        data['verification'] = verify_mapping[int(verification_value)]
+        resource_rows = self.driver.find_elements_by_css_selector('table#resourcesTable tr')[1:]
+        resources = [r.find_elements_by_tag_name('td')[1].text for r in resource_rows ]
+        data['resources'] = '|'.join(resources)
+        data['observation'] = self.waitFor(css='#notes').get_attribute('value')
+        data['recommendation'] = self.waitFor(css='#recommendation').get_attribute('value')
+        data['date'] = self.waitFor(css='#dateOfAnalysis').get_attribute('value')
+        try:
+            data['source'] = self.waitFor(css='input[name="control.interviewee"]').get_attribute('value')
+        except:
+            pass
+        return data
+
+    def editControl(self):
+        self.driver.execute_script("$('#editControl').show(); $('#noEditControl').hide(); $('#editingControl').val(true);")
     def batchAddAuditData(self, data):
         for row in data:
             self.waitFor(css='#SaveAndCloseButtonQuestion')
-            self.driver.execute_script("$('#editControl').show(); $('#noEditControl').hide(); $('#editingControl').val(true);")
+            #self.driver.execute_script("$('#editControl').show(); $('#noEditControl').hide(); $('#editingControl').val(true);")
+            self.editControl()
             self.setAll(row)
             try:
                 print "Moving to next control"
@@ -239,13 +277,17 @@ class CSO(object):
         self.setValue(self.waitFor(css='#auditDate'), date)
     def setMethod(self, method):
         mapping = {
+                '':         0,
                 'interview': 1,
                 'observation': 2,
                 'documentation': 5,
                 'testing': 6
             }
         method = method.lower()
-        self.setValue(self.waitFor('#grcAuditMethodTypeID'), mapping[method])
+        if method not in mapping:
+            print method, "is not a valid verification method.  Skipping..."
+        else:
+            self.setValue(self.waitFor('#grcAuditMethodTypeID'), mapping[method])
     def setSource(self, source):
         if source != '':
             self.setValue(self.waitFor('#auditInterviewee'), source)

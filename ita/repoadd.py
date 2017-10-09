@@ -25,5 +25,6 @@ for f in args:
         sleep(3)
     except:
         print_status("Failed to add file '{}'".format(f))
+        raise
         prompt("Navigate to client file repository")
 c.close()
