@@ -28,6 +28,6 @@ for d in raw:
 
 c = CSO()
 c.start()
-prompt('Navigate to client "Analyze Vulnerabilities" section and click on first control in Sequential Answer Mode')
-c.batchAddData(data, 'audit')
+prompt('Navigate to client Answer Risk Controls and click on first control in Sequential Answer Mode')
+c.batchAddData(data, 'risk')
 c.close()

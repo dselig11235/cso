@@ -1,5 +1,6 @@
 from time import sleep
-from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.common.keys import Keys
+from selenium.common.exceptions import NoSuchElementException, ElementNotVisibleException
 from selenium import webdriver
 import os, re
 from ConfigParser import ConfigParser, NoOptionError, NoSectionError
@@ -72,7 +73,7 @@ class CSO(object):
         self.setValue(self.waitFor('#name'), title)
         self.waitFor('input[name="file"]').send_keys(os.path.realpath(filename))
         self.waitFor(xpath='//button[span[contains(., "Save and Next")]]').click()
-        self.waitFor('tbody[role="alert"] tr:nth-child(2) input[type="checkbox"]').click()
+        self.waitFor('tbody[role="alert"] tr:nth-child(2) input[type="checkbox"]', timeout=60).click()
         self.waitFor(xpath='//button[span[contains(., "Save and Close")]]').click()
 
     def getSiblingOfLabel(self, labelname):
@@ -116,6 +117,22 @@ class CSO(object):
                     return self.driver.find_element_by_css_selector(css)
 
             except NoSuchElementException as e:
+                time += 1
+                if time > timeout:
+                    raise
+                else:
+                    sleep(1)
+
+    def tryClick(self, css="body", xpath=None, timeout=10):
+        time = 0
+        while True:
+            try:
+                if xpath is not None:
+                    return self.waitFor(xpath = xpath, timeout=timeout).click()
+                else:
+                    return self.waitFor(css = css, timeout=timeout).click()
+
+            except ElementNotVisibleException as e:
                 time += 1
                 if time > timeout:
                     raise
@@ -217,12 +234,12 @@ class CSO(object):
 
     def editControl(self):
         self.driver.execute_script("$('#editControl').show(); $('#noEditControl').hide(); $('#editingControl').val(true);")
-    def batchAddAuditData(self, data):
+    def batchAddData(self, data, selector):
         for row in data:
             self.waitFor(css='#SaveAndCloseButtonQuestion')
             #self.driver.execute_script("$('#editControl').show(); $('#noEditControl').hide(); $('#editingControl').val(true);")
             self.editControl()
-            self.setAll(row)
+            self.setAllData(row, selector)
             try:
                 print "Moving to next control"
                 self.driver.find_element_by_id('SaveAndNextButtonQuestion')
@@ -230,22 +247,49 @@ class CSO(object):
             except NoSuchElementException:
                 break
             sleep(2)
-    def setAll(self, row):
-        virt = {
-                'verification': self.setVerification,
-                'supporting documentation': self.addResources,
-                'resources': self.addResources,
-                'observation': self.setObservation,
-                'recommendation': self.setRecommendation,
-                'method': self.setMethod,
-                'source': self.setSource,
-                'date': self.setDate
-            }
+    def setAllData(self, row, selector):
+        virt = {'audit': 
+                    {
+                        'verification': self.setVerification,
+                        'supporting documentation': self.addResources,
+                        'resources': self.addResources,
+                        'observation': self.setObservation,
+                        'recommendation': self.setRecommendation,
+                        'method': self.setMethod,
+                        'source': self.setSource,
+                        'date': self.setDate
+                    },
+                'risk': {
+                        'implementation': self.setRiskImplementation,
+                        'observation': self.setObservation,
+                        'recommendation': self.setRiskRecommendation,
+                        'source': self.setRiskSource,
+                        'date': self.setRiskDate
+                    }
+                }
         for key, value in row.iteritems():
-            if key in virt and value is not None:
-                virt[key](value)
+            if key in virt[selector] and value is not None:
+                virt[selector][key](value)
         if 'date' not in row:
-            self.setDate()
+            virt[selector]['date']()
+    def setRiskImplementation(self, implemented):
+        mapping = {
+                'unanswered': 0,
+                'implemented': 1,
+                'not implemented': 2,
+                'unimplemented': 2,
+                'n/a': 3,
+                'partial': 4,
+                'partially implemented': 4,
+                'in progress': 4,
+            }
+        implemented = implemented.lower()
+        if implemented not in mapping:
+            print "WARNING:", implemented, "is not a valid verification string." 
+        else:
+            selector = "#controlImplementationLevel_%d" % mapping[implemented]
+            self.waitFor(css=selector).click()
+
     def setVerification(self, implemented):
         mapping = {
                 'unverified': 0,
@@ -266,9 +310,18 @@ class CSO(object):
     def setObservation(self, text):
         if text != '':
             self.setValue(self.waitFor(css='#notes'), text)
+    def setRiskRecommendation(self, text):
+        if text != '':
+            self.setValue(self.waitFor(css='#recommendation'), text)
     def setRecommendation(self, text):
         if text != '':
             self.setValue(self.waitFor(css='#auditRecommendation'), text)
+    def setRiskDate(self, date=None):
+        if date is None:
+            if len(self.waitFor(css='#dateOfAnalysis').get_attribute('value')) > 0:
+                return
+            date = strftime("%m/%d/%Y")
+        self.setValue(self.waitFor(css='#dateOfAnalysis'), date)
     def setDate(self, date=None):
         if date is None:
             if len(self.waitFor(css='#auditDate').get_attribute('value')) > 0:
@@ -288,6 +341,9 @@ class CSO(object):
             print method, "is not a valid verification method.  Skipping..."
         else:
             self.setValue(self.waitFor('#grcAuditMethodTypeID'), mapping[method])
+    def setRiskSource(self, source):
+        if source != '':
+            self.setValue(self.waitFor('input[name="control.interviewee"]'), source)
     def setSource(self, source):
         if source != '':
             self.setValue(self.waitFor('#auditInterviewee'), source)
