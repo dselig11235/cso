@@ -30,7 +30,8 @@ def print_debug(msg):
     print msg
 
 class CSO(object):
-    def __init__(self, credfile=os.path.join(os.environ['HOME'], "credentials.ini"), headless=False):
+    def __init__(self, credfile=os.path.join(os.environ['HOME'],"credentials.ini"),headless=False, driver='firefox'):
+        self.driver_type = driver
         self.controls = []
         self.headless = headless
         cred_config = ConfigParser()
@@ -44,7 +45,12 @@ class CSO(object):
             self.creds = None
 
     def start(self):
-        self.driver = webdriver.Chrome('/usr/lib/chromium/chromedriver')
+        if self.driver_type == 'chromium':
+            self.driver = webdriver.Chrome('/usr/lib/chromium/chromedriver')
+        elif self.driver_type == 'firefox':
+            self.driver = webdriver.Firefox()
+        else:
+            raise Exception('Invalid driver %s' % self.driver_type)
         self.driver.get('https://cso.tracesecurity.com/')
         self.login()
     
