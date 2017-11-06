@@ -1,0 +1,17 @@
+Requires:
+python-selenium
+
+And at least one of:
+firefoxdriver (for the firefox selenium webdriver)
+chromedriver (for the chromium selenium webdriver)
+phantomjs (for headless support)
+
+
+If you decide to use a credential file, a few applications will look for it by
+default in the home directory.  The format is:
+[CSO]
+login = 
+password = 
+
+
+
