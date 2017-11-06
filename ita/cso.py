@@ -3,7 +3,8 @@ from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import NoSuchElementException, ElementNotVisibleException
 from selenium import webdriver
 import os, re
-from ConfigParser import ConfigParser, NoOptionError, NoSectionError
+#XXX NoSectionError still gives me unitialized variable in __init__ for some reason
+from ConfigParser import NoSectionError, ConfigParser, NoOptionError
 from interactive import *
 from time import strftime
 
@@ -37,11 +38,17 @@ class CSO(object):
         cred_config = ConfigParser()
         cred_config.read(credfile)
         self.creds = {}
+        #XXX Don't know why this is necessary
+        from ConfigParser import NoSectionError
         try:
             self.creds['login'] = cred_config.get('CSO', 'login')
             self.creds['password'] = cred_config.get('CSO', 'password')
-        except NoOptionError, NoSectionError:
-            print_debug("Credentials for CSO not found")
+        #XXX or why I can't combine these two except clauses
+        except NoOptionError:
+            print_debug("Credentials for CSO not found.  Login manually.")
+            self.creds = None
+        except NoSectionError:
+            print_debug("Credentials for CSO not found.  Login manually.")
             self.creds = None
 
     def start(self):
