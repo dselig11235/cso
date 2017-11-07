@@ -78,6 +78,20 @@ class CSO(object):
             self.driver.execute_script('arguments[0].setAttribute("value", arguments[1])', element, value)
     def clickOn(self, s):
         self.driver.find_element_by_css_selector(s).click()
+    def fixFilesInRepo(self):
+        files = self.driver.find_elements_by_css_selector('a[title="View/Edit Resource"]')
+        for f in files:
+            repeatOnError(lambda: f.click(), lambda x: True)
+            n = self.waitFor('#name')
+            new_name = '2017 ITA-' + n.get_attribute('value')
+            self.setValue(n, new_name)
+            self.waitFor(xpath='//button[span[contains(., "Save")]]').click()
+            self.driver.find_element_by_xpath('//a[label[@class="Functional Areas"]]').click()
+            check = self.waitFor('tbody[role="alert"] tr:nth-child(2) input[type="checkbox"]')
+            if not check.get_attribute('checked'):
+                check.click()
+            self.waitFor(xpath='//button[span[contains(., "Save and Close")]]').click()
+
     def addFileToRepo(self, filename, title_fmt="{title}"):
         self.waitFor(xpath='//a[contains(., "Upload File")]').click()
         title = os.path.basename(filename)
@@ -343,11 +357,17 @@ class CSO(object):
         self.setValue(self.waitFor(css='#auditDate'), date)
     def setMethod(self, method):
         mapping = {
-                '':         0,
-                'interview': 1,
-                'observation': 2,
-                'documentation': 5,
-                'testing': 6
+                '':             0,
+                'unverified':   0,
+                'u':            0,
+                'interview':    1,
+                'i':            1,
+                'observation':  2,
+                'o':            2,
+                'documentation':5,
+                'd':            5,
+                'testing':      6,
+                't':            6,
             }
         method = method.lower()
         if method not in mapping:
